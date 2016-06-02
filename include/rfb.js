@@ -65,7 +65,6 @@ var RFB;
         this._display = null;           // Display object
         this._keyboard = null;          // Keyboard input handler object
         this._mouse = null;             // Mouse input handler object
-        this._sendTimer = null;         // Send Queue check timer
         this._disconnTimer = null;      // disconnection timer
         this._msgTimer = null;          // queued handle_msg timer
 
@@ -266,8 +265,6 @@ var RFB;
             RFB.messages.keyEvent(this._sock, XK_Delete, 0);
             RFB.messages.keyEvent(this._sock, XK_Alt_L, 0);
             RFB.messages.keyEvent(this._sock, XK_Control_L, 0);
-
-            this._sock.flush();
         },
 
         xvpOp: function (ver, op) {
@@ -301,14 +298,11 @@ var RFB;
                 RFB.messages.keyEvent(this._sock, code, 1);
                 RFB.messages.keyEvent(this._sock, code, 0);
             }
-
-            this._sock.flush();
         },
 
         clipboardPasteFrom: function (text) {
             if (this._rfb_state !== 'normal') { return; }
             RFB.messages.clientCutText(this._sock, text);
-            this._sock.flush();
         },
 
         // Requests a change of remote desktop size. This message is an extension
@@ -384,11 +378,6 @@ var RFB;
         },
 
         _cleanupSocket: function (state) {
-            if (this._sendTimer) {
-                clearInterval(this._sendTimer);
-                this._sendTimer = null;
-            }
-
             if (this._msgTimer) {
                 clearInterval(this._msgTimer);
                 this._msgTimer = null;
@@ -562,7 +551,6 @@ var RFB;
         _handleKeyPress: function (keysym, down) {
             if (this._view_only) { return; } // View only, skip keyboard, events
             RFB.messages.keyEvent(this._sock, keysym, down);
-            this._sock.flush();
         },
 
         _handleMouseButton: function (x, y, down, bmask) {
@@ -667,10 +655,6 @@ var RFB;
             if (this._rfb_version > this._rfb_max_version) {
                 this._rfb_version = this._rfb_max_version;
             }
-
-            // Send updates either at a rate of 1 update per 50ms, or
-            // whatever slower rate the network can handle
-            this._sendTimer = setInterval(this._sock.flush.bind(this._sock), 50);
 
             var cversion = "00" + parseInt(this._rfb_version, 10) +
                            ".00" + ((this._rfb_version * 10) % 10);
@@ -990,7 +974,6 @@ var RFB;
 
             this._timing.fbu_rt_start = (new Date()).getTime();
             this._timing.pixels = 0;
-            this._sock.flush();
 
             if (this._encrypt) {
                 this._updateState('normal', 'Connected (encrypted) to: ' + this._fb_name);
@@ -1093,7 +1076,6 @@ var RFB;
                     var ret = this._framebufferUpdate();
                     if (ret) {
                         RFB.messages.fbUpdateRequests(this._sock, this._display.getCleanDirtyReset(), this._fb_width, this._fb_height);
-                        this._sock.flush();
                     }
                     return ret;
 
@@ -1283,6 +1265,7 @@ var RFB;
             buff[offset + 7] = keysym;
 
             sock._sQlen += 8;
+            sock.flush();
         },
 
         pointerEvent: function (sock, x, y, mask) {
@@ -1300,6 +1283,7 @@ var RFB;
             buff[offset + 5] = y;
 
             sock._sQlen += 6;
+            sock.flush();
         },
 
         // TODO(directxman12): make this unicode compatible?
@@ -1325,6 +1309,7 @@ var RFB;
             }
 
             sock._sQlen += 8 + n;
+            sock.flush();
         },
 
         setDesktopSize: function (sock, width, height, id, flags) {
@@ -1360,6 +1345,7 @@ var RFB;
             buff[offset + 23] = flags;
 
             sock._sQlen += 24;
+            sock.flush();
         },
 
         pixelFormat: function (sock, bpp, depth, true_color) {
@@ -1395,6 +1381,7 @@ var RFB;
             buff[offset + 19] = 0;   // padding
 
             sock._sQlen += 20;
+            sock.flush();
         },
 
         clientEncodings: function (sock, encodings, local_cursor, true_color) {
@@ -1429,6 +1416,7 @@ var RFB;
             buff[offset + 3] = cnt;
 
             sock._sQlen += j - offset;
+            sock.flush();
         },
 
         fbUpdateRequests: function (sock, cleanDirty, fb_width, fb_height) {
@@ -1475,6 +1463,7 @@ var RFB;
             buff[offset + 9] = h & 0xFF;
 
             sock._sQlen += 10;
+            sock.flush();
         }
     };
 
